@@ -1,4 +1,7 @@
 console.log("arrancando...");
+const QRCode = require("qrcode");
+const os = require("os");
+
 
 const express = require("express");
 const http = require("http");
@@ -29,6 +32,35 @@ io.on("connection", (socket) => {
 server.listen(3000, "0.0.0.0", () => {
   console.log("🚀 SERVER OK 3000");
 });
+
+app.get("/qr", async (req, res) => {
+
+  const ip = getLocalIP();
+
+  const j1 = `http://${ip}:3000/j1.html`;
+  const j2 = `http://${ip}:3000/j2.html`;
+
+  const qr1 = await QRCode.toDataURL(j1);
+  const qr2 = await QRCode.toDataURL(j2);
+
+  res.json({ j1, j2, qr1, qr2 });
+});
+
+
+function getLocalIP() {
+  const nets = os.networkInterfaces();
+
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === "IPv4" && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+
+  return "localhost";
+}
+
 
 // -------- ADMIN TECLADO --------
 

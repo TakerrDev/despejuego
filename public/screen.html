@@ -162,6 +162,92 @@ body{
   padding-bottom:20px;
   color:#ffd54f;
 }
+
+.question-enter {
+  animation: questionIn .5s cubic-bezier(.2,.8,.2,1);
+}
+
+@keyframes questionIn {
+  from {
+    opacity:0;
+    transform:translateY(40px) scale(.95);
+  }
+  to {
+    opacity:1;
+    transform:none;
+  }
+}
+
+.selected {
+  border-color:#ffd54f;
+  transform:scale(1.08);
+  box-shadow:
+    0 0 10px #ffd54f,
+    0 0 30px #ffd54f,
+    0 0 60px rgba(255,213,79,.8);
+}
+
+.correct {
+  background:#2ecc71!important;
+  animation: correctBoom .6s ease;
+}
+
+@keyframes correctBoom {
+  0%{ transform:scale(1); }
+  40%{ transform:scale(1.2); }
+  70%{ transform:scale(.95); }
+  100%{ transform:scale(1); }
+}
+
+.wrong {
+  background:#e74c3c!important;
+  animation: wrongShake .5s, wrongFlash .5s;
+}
+
+@keyframes wrongShake {
+  0%,100%{transform:translateX(0)}
+  25%{transform:-12px}
+  50%{transform:12px}
+  75%{transform:-8px}
+}
+
+@keyframes wrongFlash {
+  0%{filter:brightness(1)}
+  50%{filter:brightness(2)}
+  100%{filter:brightness(1)}
+}
+.answer.fadeOut {
+  animation: fadeAnswer .4s forwards;
+}
+
+@keyframes fadeAnswer {
+  to {
+    opacity:0;
+    transform:scale(.8);
+  }
+}
+
+#winnerOverlay{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.9);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:90px;
+  color:#ffd54f;
+  opacity:0;
+  pointer-events:none;
+  transition:.4s;
+}
+
+#winnerOverlay.show{
+  opacity:1;
+}
+
+
+
+
 </style>
 </head>
 
@@ -172,21 +258,21 @@ body{
   <div id="activePlayer">¡PULSAD!</div>
 
   <div id="scores">
-    <div>Pedrito: <span id="s1">0</span></div>
-    <div>Raquelita: <span id="s2">0</span></div>
+    <div>Petrus: <span id="s1">0</span></div>
+    <div>Raquel: <span id="s2">0</span></div>
   </div>
 
   <div id="lifelinesBar">
 
     <div class="playerLife" id="lifeP1">
-      <span class="tag">Pedrito</span>
+      <span class="tag">Petrus</span>
       <span class="life fifty" data-count="1">½</span>
       <span class="life public" data-count="1">👥</span>
       <span class="life steal" data-count="1">⚡</span>
     </div>
 
     <div class="playerLife" id="lifeP2">
-      <span class="tag">Raquelita</span>
+      <span class="tag">Raquel</span>
       <span class="life fifty" data-count="1">½</span>
       <span class="life public" data-count="1">👥</span>
       <span class="life steal" data-count="1">⚡</span>
@@ -195,6 +281,20 @@ body{
   </div>
 
 </div>
+
+<div id="qrContainer" style="text-align:center; margin-top:20px;">
+  <div style="display:flex; justify-content:center; gap:80px;">
+    <div>
+      <img id="qr1" width="180">
+      <div>Pedro</div>
+    </div>
+    <div>
+      <img id="qr2" width="180">
+      <div>Raquel</div>
+    </div>
+  </div>
+</div>
+
 
 <div id="question">Pulsa N para empezar</div>
 
@@ -206,14 +306,19 @@ body{
 </div>
 
 <div id="status"></div>
-
+<div id="winnerOverlay"></div>
 <script src="/socket.io/socket.io.js"></script>
 
 <script>
 /* ======================
+   🔌 SOCKET
+====================== */
+const socket = io();
+
+
+/* ======================
    🔊 SONIDOS
 ====================== */
-
 const sndSelect  = new Audio("/sounds/select.mp3");
 const sndCorrect = new Audio("/sounds/correct.mp3");
 const sndWrong   = new Audio("/sounds/wrong.mp3");
@@ -223,19 +328,21 @@ const sndWrong   = new Audio("/sounds/wrong.mp3");
   s.volume = 0.4;
 });
 
-/* desbloquear autoplay (obligatorio Chrome) */
+/* desbloquear autoplay (click o tecla) */
 function unlockAudio(){
   [sndSelect, sndCorrect, sndWrong].forEach(s=>{
     s.play().then(()=>s.pause()).catch(()=>{});
     s.currentTime = 0;
   });
-  document.removeEventListener("click", unlockAudio);
 }
-document.addEventListener("click", unlockAudio);
 
-document.addEventListener("click", unlockAudio);
-const socket = io();
+document.addEventListener("click", unlockAudio, { once:true });
+document.addEventListener("keydown", unlockAudio, { once:true });
 
+
+/* ======================
+   📦 DOM
+====================== */
 const s1 = document.getElementById("s1");
 const s2 = document.getElementById("s2");
 const questionEl = document.getElementById("question");
@@ -249,7 +356,21 @@ const answers = [
   document.getElementById("a3")
 ];
 
-/* fullscreen */
+
+/* ======================
+   📱 QR AUTO LOAD
+====================== */
+fetch("/qr")
+  .then(r => r.json())
+  .then(data => {
+    document.getElementById("qr1").src = data.qr1;
+    document.getElementById("qr2").src = data.qr2;
+  });
+
+
+/* ======================
+   🔳 FULLSCREEN (F)
+====================== */
 document.addEventListener("keydown",(e)=>{
   if(e.key==="f"){
     if(!document.fullscreenElement)
@@ -259,9 +380,20 @@ document.addEventListener("keydown",(e)=>{
   }
 });
 
-/* ------------------- */
-/* COMODINES */
-/* ------------------- */
+
+/* ======================
+   🏆 WINNER OVERLAY
+====================== */
+function showWinner(name){
+  const w = document.getElementById("winnerOverlay");
+  w.innerText = `🏆 ${name} GANA 🏆`;
+  w.classList.add("show");
+}
+
+
+/* ======================
+   🎯 LIFELINES UI
+====================== */
 function updateLifeIcons(playerId, lifelines){
 
   const root = playerId===1
@@ -296,24 +428,35 @@ function updateLifeIcons(playerId, lifelines){
   }
 }
 
-/* ------------------- */
-/* SOCKET EVENTS */
-/* ------------------- */
+
+/* ======================
+   🎮 SOCKET EVENTS
+====================== */
 
 socket.on("newQuestion",(q)=>{
+
   questionEl.innerText=q.text;
+
   answers.forEach((a,i)=>{
     a.querySelector("span:last-child").innerText=q.answers[i];
     a.className="answer";
     a.style.visibility="visible";
   });
+
+  /* animación entrada pregunta */
+  questionEl.classList.remove("question-enter");
+  void questionEl.offsetWidth;
+  questionEl.classList.add("question-enter");
+
   activeEl.innerText="¡PULSAD!";
   statusEl.innerText="";
 });
 
+
 socket.on("buzzed",(p)=>{
-  activeEl.innerText=`TURNO DE ${p===1?"Pedrito":"Raquelita"}`;
+  activeEl.innerText=`TURNO DE ${p===1?"Petrus":"Raquel"}`;
 });
+
 
 socket.on("answerSelected",(i)=>{
   answers.forEach(a=>a.classList.remove("selected"));
@@ -329,6 +472,7 @@ socket.on("answerResult",(d)=>{
   if(d.correct){
     sndCorrect.currentTime = 0;
     sndCorrect.play();
+
   } else {
     sndWrong.currentTime = 0;
     sndWrong.play();
@@ -348,22 +492,35 @@ socket.on("lifelineUpdate",({playerId,lifelines})=>{
   updateLifeIcons(playerId,lifelines);
 });
 
-socket.on("lifeline50", (removed) => {
-  removed.forEach(i => {
-    answers[i].style.visibility = "hidden";
+
+/* 50/50 fade bonito */
+socket.on("lifeline50",(removed)=>{
+  removed.forEach(i=>{
+    answers[i].classList.add("fadeOut");
   });
 });
 
+
 socket.on("lifelinePublic",(playerId)=>{
-  statusEl.innerText=`📢 ${playerId===1?"Pedrito":"Raquelita"} consulta al público`;
+  statusEl.innerText=`📢 ${playerId===1?"Petrus":"Raquel"} consulta al público`;
 });
+
 
 socket.on("turnStolen",(playerId)=>{
-  activeEl.innerText=`⚡ TURNO ROBADO → ${playerId===1?"Pedrito":"Raquelita"}`;
+  activeEl.innerText=`⚡ TURNO ROBADO → ${playerId===1?"Petrus":"Raquel"}`;
 });
 
+socket.on("gameOver", ({winner, scores}) => {
+
+  if (winner === 1) showWinner("Petrus");
+  else if (winner === 2) showWinner("Raquel");
+  else showWinner("EMPATE");
+
+  statusEl.innerText = `Final: ${scores[1]} - ${scores[2]}`;
+});
 
 </script>
+
 
 </body>
 </html>

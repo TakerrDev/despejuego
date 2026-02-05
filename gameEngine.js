@@ -129,17 +129,37 @@ addLifeline(playerId, type, amount = 1) {
   // Estados
   // -------------------
   nextQuestion() {
-    this.currentQuestionIndex++;
 
-    const q = this.questions[this.currentQuestionIndex];
+  this.currentQuestionIndex++;
 
-    this.setPhase("WAITING_BUZZ");
+  if (this.currentQuestionIndex >= this.questions.length) {
 
-    this.currentPlayer = null;
-    this.selectedAnswer = null;
+    let winner = null;
 
-    this.io.emit("newQuestion", q);
+    if (this.scores[1] > this.scores[2]) winner = 1;
+    else if (this.scores[2] > this.scores[1]) winner = 2;
+    else winner = 0; // empate
+
+    this.io.emit("gameOver", {
+      winner,
+      scores: this.scores
+    });
+
+    this.phase = "GAME_OVER";
+
+    return;
   }
+
+  /* normal */
+  const q = this.questions[this.currentQuestionIndex];
+
+  this.phase = "WAIT_BUZZ";
+  this.currentPlayer = null;
+  this.selectedAnswer = null;
+
+  this.io.emit("newQuestion", q);
+}
+
 
   buzz(playerId) {
 
