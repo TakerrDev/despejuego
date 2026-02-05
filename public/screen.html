@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>TRIVIAL DESPEDIDA</title>
+
+<style>
+body{
+  margin:0;
+  font-family:Arial, Helvetica, sans-serif;
+  background:linear-gradient(135deg,#0f2027,#203a43,#2c5364);
+  color:white;
+  display:flex;
+  flex-direction:column;
+  height:100vh;
+}
+
+/* TOPBAR */
+#topbar{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:20px 40px;
+}
+
+/* JUGADOR ACTIVO */
+#activePlayer{
+  font-size:60px;
+  font-weight:bold;
+  color:#ffd54f;
+  text-shadow:0 0 15px rgba(255,213,79,.8);
+  animation:pulse 1s infinite alternate;
+}
+
+@keyframes pulse{
+  from{transform:scale(1)}
+  to{transform:scale(1.06)}
+}
+
+/* SCORE */
+#scores{
+  display:flex;
+  gap:40px;
+  font-size:28px;
+}
+
+/* COMODINES */
+#lifelinesBar{
+  display:flex;
+  gap:70px;
+  font-size:28px;
+}
+
+.playerLife{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+
+.tag{
+  font-weight:bold;
+}
+
+.life{
+  background:#1e2a38;
+  border-radius:50%;
+  width:45px;
+  height:45px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+  transition:.25s;
+}
+
+/* contador */
+.life::after{
+  content:attr(data-count);
+  position:absolute;
+  bottom:-6px;
+  right:-6px;
+  background:#ffd54f;
+  color:black;
+  font-size:14px;
+  border-radius:50%;
+  width:20px;
+  height:20px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+/* ocultar 0 */
+.life[data-count="0"]::after{
+  display:none;
+}
+
+/* gastado */
+.life.used{
+  opacity:.25;
+  filter:grayscale(100%);
+}
+
+/* animaciones */
+.life.pop{ animation:pop .25s ease; }
+.life.flash{ animation:flash .4s alternate 3; }
+
+@keyframes pop{
+  50%{transform:scale(1.4)}
+}
+
+@keyframes flash{
+  from{filter:brightness(1)}
+  to{filter:brightness(2.5)}
+}
+
+/* PREGUNTA */
+#question{
+  text-align:center;
+  font-size:48px;
+  padding:40px;
+  flex:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+/* RESPUESTAS */
+#answers{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:25px;
+  padding:40px;
+  flex:1.3;
+}
+
+.answer{
+  background:#1e2a38;
+  border-radius:20px;
+  padding:25px;
+  font-size:32px;
+  display:flex;
+  align-items:center;
+  border:4px solid transparent;
+  transition:.2s;
+}
+
+.letter{
+  font-weight:bold;
+  font-size:40px;
+  margin-right:20px;
+  color:#ffd54f;
+}
+
+.selected{border-color:yellow; transform:scale(1.05)}
+.correct{background:#2ecc71!important}
+.wrong{background:#e74c3c!important}
+
+#status{
+  text-align:center;
+  font-size:30px;
+  padding-bottom:20px;
+  color:#ffd54f;
+}
+</style>
+</head>
+
+<body>
+
+<div id="topbar">
+
+  <div id="activePlayer">¡PULSAD!</div>
+
+  <div id="scores">
+    <div>Pedrito: <span id="s1">0</span></div>
+    <div>Raquelita: <span id="s2">0</span></div>
+  </div>
+
+  <div id="lifelinesBar">
+
+    <div class="playerLife" id="lifeP1">
+      <span class="tag">Pedrito</span>
+      <span class="life fifty" data-count="1">½</span>
+      <span class="life public" data-count="1">👥</span>
+      <span class="life steal" data-count="1">⚡</span>
+    </div>
+
+    <div class="playerLife" id="lifeP2">
+      <span class="tag">Raquelita</span>
+      <span class="life fifty" data-count="1">½</span>
+      <span class="life public" data-count="1">👥</span>
+      <span class="life steal" data-count="1">⚡</span>
+    </div>
+
+  </div>
+
+</div>
+
+<div id="question">Pulsa N para empezar</div>
+
+<div id="answers">
+  <div class="answer" id="a0"><span class="letter">A</span><span></span></div>
+  <div class="answer" id="a1"><span class="letter">B</span><span></span></div>
+  <div class="answer" id="a2"><span class="letter">C</span><span></span></div>
+  <div class="answer" id="a3"><span class="letter">D</span><span></span></div>
+</div>
+
+<div id="status"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+
+<script>
+/* ======================
+   🔊 SONIDOS
+====================== */
+
+const sndSelect  = new Audio("/sounds/select.mp3");
+const sndCorrect = new Audio("/sounds/correct.mp3");
+const sndWrong   = new Audio("/sounds/wrong.mp3");
+
+[sndSelect, sndCorrect, sndWrong].forEach(s=>{
+  s.preload = "auto";
+  s.volume = 0.4;
+});
+
+/* desbloquear autoplay (obligatorio Chrome) */
+function unlockAudio(){
+  [sndSelect, sndCorrect, sndWrong].forEach(s=>{
+    s.play().then(()=>s.pause()).catch(()=>{});
+    s.currentTime = 0;
+  });
+  document.removeEventListener("click", unlockAudio);
+}
+document.addEventListener("click", unlockAudio);
+
+document.addEventListener("click", unlockAudio);
+const socket = io();
+
+const s1 = document.getElementById("s1");
+const s2 = document.getElementById("s2");
+const questionEl = document.getElementById("question");
+const statusEl = document.getElementById("status");
+const activeEl = document.getElementById("activePlayer");
+
+const answers = [
+  document.getElementById("a0"),
+  document.getElementById("a1"),
+  document.getElementById("a2"),
+  document.getElementById("a3")
+];
+
+/* fullscreen */
+document.addEventListener("keydown",(e)=>{
+  if(e.key==="f"){
+    if(!document.fullscreenElement)
+      document.documentElement.requestFullscreen();
+    else
+      document.exitFullscreen();
+  }
+});
+
+/* ------------------- */
+/* COMODINES */
+/* ------------------- */
+function updateLifeIcons(playerId, lifelines){
+
+  const root = playerId===1
+    ? document.getElementById("lifeP1")
+    : document.getElementById("lifeP2");
+
+  const map = {
+    fifty: root.querySelector(".fifty"),
+    public: root.querySelector(".public"),
+    steal: root.querySelector(".steal")
+  };
+
+  for(let key in map){
+
+    const el = map[key];
+    const old = parseInt(el.getAttribute("data-count")||0);
+    const now = lifelines[key];
+
+    el.setAttribute("data-count", now);
+
+    el.classList.remove("pop","flash","used");
+
+    if(now<=0){
+      el.classList.add("used");
+      continue;
+    }
+
+    if(now>old) el.classList.add("pop");
+    if(now<old) el.classList.add("flash");
+
+    setTimeout(()=>el.classList.remove("pop","flash"),300);
+  }
+}
+
+/* ------------------- */
+/* SOCKET EVENTS */
+/* ------------------- */
+
+socket.on("newQuestion",(q)=>{
+  questionEl.innerText=q.text;
+  answers.forEach((a,i)=>{
+    a.querySelector("span:last-child").innerText=q.answers[i];
+    a.className="answer";
+    a.style.visibility="visible";
+  });
+  activeEl.innerText="¡PULSAD!";
+  statusEl.innerText="";
+});
+
+socket.on("buzzed",(p)=>{
+  activeEl.innerText=`TURNO DE ${p===1?"Pedrito":"Raquelita"}`;
+});
+
+socket.on("answerSelected",(i)=>{
+  answers.forEach(a=>a.classList.remove("selected"));
+  answers[i].classList.add("selected");
+
+  sndSelect.currentTime = 0;
+  sndSelect.play();
+});
+
+
+socket.on("answerResult",(d)=>{
+
+  if(d.correct){
+    sndCorrect.currentTime = 0;
+    sndCorrect.play();
+  } else {
+    sndWrong.currentTime = 0;
+    sndWrong.play();
+  }
+
+  answers[d.correctIndex].classList.add("correct");
+
+  if(!d.correct)
+    answers.forEach(a=>a.classList.contains("selected") && a.classList.add("wrong"));
+
+  s1.innerText=d.scores[1];
+  s2.innerText=d.scores[2];
+});
+
+
+socket.on("lifelineUpdate",({playerId,lifelines})=>{
+  updateLifeIcons(playerId,lifelines);
+});
+
+socket.on("lifeline50", (removed) => {
+  removed.forEach(i => {
+    answers[i].style.visibility = "hidden";
+  });
+});
+
+socket.on("lifelinePublic",(playerId)=>{
+  statusEl.innerText=`📢 ${playerId===1?"Pedrito":"Raquelita"} consulta al público`;
+});
+
+socket.on("turnStolen",(playerId)=>{
+  activeEl.innerText=`⚡ TURNO ROBADO → ${playerId===1?"Pedrito":"Raquelita"}`;
+});
+
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Raquel</title>
+
+  <style>
+    body {
+      margin: 0;
+      background: #0059ff;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: Arial;
+    }
+
+    button {
+      width: 100%;
+      height: 100%;
+      font-size: 12vw;
+      font-weight: bold;
+      color: white;
+      background: transparent;
+      border: none;
+    }
+
+    .pressed {
+      background: rgba(0,0,0,0.25);
+      transform: scale(0.95);
+    }
+  </style>
+</head>
+
+<body>
+  <button id="buzz">RAQUEL</button>
+
+  <script src="/socket.io/socket.io.js"></script>
+
+  <script>
+    const socket = io();
+    const btn = document.getElementById("buzz");
+
+    let locked = false;
+
+    btn.addEventListener("click", () => {
+      if (locked) return;
+
+      locked = true;
+
+      socket.emit("buzz", 2);
+
+      btn.classList.add("pressed");
+
+      // vibración móvil (si soporta)
+      if (navigator.vibrate) navigator.vibrate(120);
+    });
+
+    // cuando nueva pregunta → desbloquear
+    socket.on("newQuestion", () => {
+      locked = false;
+      btn.classList.remove("pressed");
+    });
+  </script>
+</body>
+</html>
