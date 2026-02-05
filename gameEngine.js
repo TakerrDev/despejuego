@@ -153,7 +153,7 @@ addLifeline(playerId, type, amount = 1) {
   /* normal */
   const q = this.questions[this.currentQuestionIndex];
 
-  this.phase = "WAIT_BUZZ";
+  this.phase = "WAITING_BUZZ";
   this.currentPlayer = null;
   this.selectedAnswer = null;
 
